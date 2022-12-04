@@ -1,34 +1,49 @@
 """
 Test custom Django management commands.
 """
+""" Patch for mocking the behaviour of the database"""
 from unittest.mock import patch
-
+"""Possible error when trying to connect to database"""
 from psycopg2 import OperationalError as Psycopg2OpError
-
+""" command = helperfunction for call a command by the name"""
 from django.core.management import call_command
 from django.db.utils import OperationalError
+
+""" SimpleTestCase for testing that the database is not available yet"""
 from django.test import SimpleTestCase
 
-
+""" Mocking database behaviour using check method from base command """
 @patch('core.management.commands.wait_for_db.Command.check')
 class CommandTests(SimpleTestCase):
     """Test commands."""
 
     def test_wait_for_db_ready(self, patched_check):
-        """Test waiting for database if database ready."""
+        """Test waiting for database if database ready by using patch()."""
         patched_check.return_value = True
 
         call_command('wait_for_db')
 
         patched_check.assert_called_once_with(databases=['default'])
 
+        """ Test wat should happen if the DB isn't ready yet+"""
+
     @patch('time.sleep')
     def test_wait_for_db_delay(self, patched_sleep, patched_check):
-        """Test waiting for database when getting OperationalError."""
+        """Test waiting for database when getting OperationalError using side_effect.
+         First, a psycopg2Error if database is not ready to accept any connections. 
+         OperationalError if database can accept connections but isn't ready to use"""
         patched_check.side_effect = [Psycopg2OpError] * 2 + \
             [OperationalError] * 3 + [True]
-
+        
+        """ Triggers the call_command, checks that command is set up correctly,
+        and can be called inside Django project, and checks that the database is ready
+        """
         call_command('wait_for_db')
 
+        """ Must have been called 6 times"""
         self.assertEqual(patched_check.call_count, 6)
+
+        """ 
+         check that this check method has been called so it will be patched.
+         """
         patched_check.assert_called_with(databases=['default'])
